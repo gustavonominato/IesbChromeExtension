@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btnExecutar = document.getElementById("btnExecutar");
     const status = document.getElementById("status");
 
-    await carregarResumoPresencaProcessada();
+    const downloadPresencaProcessado = await carregarResumoPresencaProcessada();
 
     const [tab] = await chrome.tabs.query({
         active: true,
@@ -37,9 +37,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         btnExecutar.innerText = "Aplicar";
         status.innerText = "IESB Online identificado.";
     } else if (isSiteDrive) {
-        btnExecutar.innerText = "Aguardando download";
-        btnExecutar.disabled = true;
-        status.innerText = "Google Drive identificado. Baixe o arquivo de presença para processar.";
+        if (downloadPresencaProcessado) {
+            marcarDownloadComoProcessado();
+        } else {
+            btnExecutar.innerText = "Aguardando download";
+            btnExecutar.disabled = true;
+            btnExecutar.classList.remove("download-processado");
+            status.innerText = "Google Drive identificado. Baixe o arquivo de presença para processar.";
+        }
         return;
     } else {
         btnExecutar.innerText = "Indisponível";
@@ -66,11 +71,11 @@ async function carregarResumoPresencaProcessada() {
     const resumoPresenca = document.getElementById("resumoPresenca");
     const totalArquivosProcessados = document.getElementById("totalArquivosProcessados");
     const totalAlunosProcessados = document.getElementById("totalAlunosProcessados");
-    const totalAulasProcessadas = document.getElementById("totalAulasProcessadas");
+    const listaAulasProcessadas = document.getElementById("listaAulasProcessadas");
 
-    if (!resumoPresenca || !totalArquivosProcessados || !totalAlunosProcessados || !totalAulasProcessadas) {
+    if (!resumoPresenca || !totalArquivosProcessados || !totalAlunosProcessados || !listaAulasProcessadas) {
         console.warn("[IESB Popup] Elementos do resumo não encontrados no popup.html");
-        return;
+        return false;
     }
 
     try {
@@ -80,12 +85,13 @@ async function carregarResumoPresencaProcessada() {
 
         if (!presencaConsolidadoPorAluno) {
             resumoPresenca.style.display = "none";
-            return;
+            return false;
         }
 
         totalArquivosProcessados.innerText = presencaConsolidadoPorAluno.totalArquivosProcessados ?? 0;
         totalAlunosProcessados.innerText = presencaConsolidadoPorAluno.totalAlunos ?? 0;
-        totalAulasProcessadas.innerText = presencaConsolidadoPorAluno.totalAulas ?? 0;
+        preencherListaAulasProcessadas(listaAulasProcessadas, presencaConsolidadoPorAluno);
+        marcarDownloadComoProcessado();
 
         console.log("[IESB Popup] Consolidado para aplicação:");
         console.table((presencaConsolidadoPorAluno.consolidadoParaAplicacao || []).map(aluno => ({
@@ -97,8 +103,78 @@ async function carregarResumoPresencaProcessada() {
         })));
 
         resumoPresenca.style.display = "block";
+        return true;
     } catch (error) {
         console.error("[IESB Popup] Erro ao carregar resumo de presença:", error);
         resumoPresenca.style.display = "none";
+        return false;
     }
+}
+
+function marcarDownloadComoProcessado() {
+    const btnExecutar = document.getElementById("btnExecutar");
+    const status = document.getElementById("status");
+
+    if (!btnExecutar || !status) return;
+
+    btnExecutar.innerText = "Download processado";
+    btnExecutar.disabled = true;
+    btnExecutar.classList.add("download-processado");
+    status.innerText = "Download interceptado e processado com sucesso.";
+}
+
+function preencherListaAulasProcessadas(container, presencaConsolidadoPorAluno) {
+    container.innerHTML = "";
+
+    const aulas = calcularResumoPorData(presencaConsolidadoPorAluno);
+
+    if (!aulas.length) {
+        container.innerHTML = "<div class='linha-aula-processada'>Nenhuma aula identificada.</div>";
+        return;
+    }
+
+    aulas.forEach(aula => {
+        const div = document.createElement("div");
+        div.className = "linha-aula-processada";
+        div.innerText = `${aula.data}, ${aula.presencas} presenças, ${aula.faltas} faltas`;
+        container.appendChild(div);
+    });
+}
+
+function calcularResumoPorData(presencaConsolidadoPorAluno) {
+    const datasAulas = presencaConsolidadoPorAluno?.datasAulas || [];
+    const consolidadoParaAplicacao = presencaConsolidadoPorAluno?.consolidadoParaAplicacao || [];
+
+    return datasAulas.map(data => {
+        let presencas = 0;
+        let faltas = 0;
+
+        consolidadoParaAplicacao.forEach(aluno => {
+            const presente = aluno.presencasPorData?.[data] === 1;
+
+            if (presente) {
+                presencas++;
+            } else {
+                faltas++;
+            }
+        });
+
+        return {
+            data: formatarDataPopup(data),
+            presencas,
+            faltas,
+        };
+    });
+}
+
+function formatarDataPopup(dataIso) {
+    if (!dataIso) return "";
+
+    const partes = dataIso.split("-");
+
+    if (partes.length !== 3) {
+        return dataIso;
+    }
+
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }

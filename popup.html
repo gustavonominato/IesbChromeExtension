@@ -43,6 +43,24 @@
             margin-bottom: 4px;
             font-size: 13px;
         }
+
+        #listaAulasProcessadas {
+            margin-top: 4px;
+        }
+
+        .linha-aula-processada {
+            padding: 3px 0;
+            border-top: 1px solid #ddd;
+        }
+
+        .linha-aula-processada:first-child {
+            border-top: none;
+        }
+
+        .download-processado {
+            background: #198754 !important;
+            color: #fff !important;
+        }
     </style>
 </head>
 <body>
@@ -53,7 +71,8 @@
     <strong>Presença processada</strong>
     <div>Arquivos processados: <span id="totalArquivosProcessados">0</span></div>
     <div>Alunos encontrados: <span id="totalAlunosProcessados">0</span></div>
-    <div>Aulas identificadas: <span id="totalAulasProcessadas">0</span></div>
+    <div style="margin-top: 8px;">Aulas identificadas:</div>
+    <div id="listaAulasProcessadas"></div>
 </div>
 
 <script src="popup.js"></script>
