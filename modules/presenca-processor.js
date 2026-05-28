@@ -1,8 +1,19 @@
 /**
- * Conteúdo temporário para virar o presenca-processor.js
- * Dependência esperada: XLSX global.
+ * presenca-processor.js
+ *
+ * Módulo de processamento de presença da extensão.
+ *
+ * Responsabilidades principais:
+ * - Receber arquivos Excel já carregados em memória.
+ * - Ler as planilhas usando SheetJS.
+ * - Extrair os registros de presença de cada aula.
+ * - Interpretar a duração de permanência do aluno na aula.
+ * - Classificar cada aluno como Presente ou Falta.
+ * - Consolidar os dados por aula e por aluno.
+ * - Calcular presenças, faltas e faltas ponderadas.
+ * - Montar o objeto consolidado usado posteriormente para aplicação no IESB.
+ * - Salvar o resultado em chrome.storage.local na chave presencaConsolidadoPorAluno.
  */
-
 async function processarArquivosPresenca(arquivosExcel) {
     const dadosConsolidados = [];
 
@@ -88,7 +99,7 @@ function obterContextoDoArquivo(arquivo) {
     const partes = caminho.split('/');
 
     const nomePasta = partes.length >= 2 ? partes[partes.length - 2] : '';
-    const data = extrairDataDoNome(nomePasta);
+    const data = extrairDataIsoDoNome(nomePasta);
 
     return {
         nomePasta,
@@ -97,8 +108,7 @@ function obterContextoDoArquivo(arquivo) {
 }
 
 function extrairDataDoNome(nome) {
-    const match = String(nome || '').match(/^(\d{4}-\d{2}-\d{2})/);
-    return match ? match[1] : '';
+    return extrairDataIsoDoNome(nome);
 }
 
 function normalizarLinha(linha) {
@@ -202,17 +212,15 @@ function montarConsolidadoParaAplicacao(consolidadoPorAluno, datasAulas) {
 }
 
 async function salvarConsolidadoPresencaEmMemoria(resultado) {
-    if (!chrome || !chrome.storage || !chrome.storage.local) {
-        console.warn('[Presença Processor] chrome.storage.local indisponível. Consolidado não foi salvo em memória.');
+    if (typeof salvarConsolidadoPresenca !== 'function') {
+        console.warn('[Presença Processor] storage-service.js indisponível. Consolidado não foi salvo em memória.');
         return;
     }
 
-    await chrome.storage.local.set({
-        presencaConsolidadoPorAluno: resultado,
-    });
+    await salvarConsolidadoPresenca(resultado);
 
     console.log('[Presença Processor] Consolidado por aluno salvo em memória da extensão:', {
-        chave: 'presencaConsolidadoPorAluno',
+        chave: STORAGE_KEYS.PRESENCA_CONSOLIDADO,
         totalArquivosProcessados: resultado.totalArquivosProcessados,
         totalAlunos: resultado.totalAlunos,
         totalAulas: resultado.totalAulas,
@@ -274,15 +282,7 @@ function compararAlunosPorNomeCompleto(a, b) {
 }
 
 function formatarData(dataIso) {
-    if (!dataIso) return '';
-
-    const partes = dataIso.split('-');
-
-    if (partes.length !== 3) {
-        return dataIso;
-    }
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    return formatarDataIsoParaBr(dataIso);
 }
 
 function converterDuracaoParaMinutos(valor) {
@@ -294,7 +294,13 @@ function converterDuracaoParaMinutos(valor) {
 
     const texto = String(valor).trim().toLowerCase();
 
-    if (/\d+\s*h\b/.test(texto)) {
+    if (!texto) return 0;
+
+    const temHoras = /\d+\s*h\b/.test(texto);
+    const temMinutos = /\d+\s*min\b/.test(texto);
+    const temSegundos = /\d+\s*s\b/.test(texto);
+
+    if (temHoras) {
         const matchHoras = texto.match(/(\d+)\s*h\b/);
         const matchMinutos = texto.match(/(\d+)\s*min\b/);
 
@@ -304,9 +310,13 @@ function converterDuracaoParaMinutos(valor) {
         return horas * 60 + minutos;
     }
 
-    const matchMinutosTexto = texto.match(/(\d+)\s*min/);
-    if (matchMinutosTexto) {
-        return Number(matchMinutosTexto[1]);
+    if (temMinutos) {
+        const matchMinutos = texto.match(/(\d+)\s*min\b/);
+        return matchMinutos ? Number(matchMinutos[1]) : 0;
+    }
+
+    if (temSegundos) {
+        return 0;
     }
 
     const matchHorario = texto.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
@@ -323,8 +333,7 @@ function converterDuracaoParaMinutos(valor) {
         return parte1 + parte2 / 60;
     }
 
-    const matchNumero = texto.match(/(\d+)/);
-    return matchNumero ? Number(matchNumero[1]) : 0;
+    return 0;
 }
 
 function imprimirPresencasPorAula(dados) {

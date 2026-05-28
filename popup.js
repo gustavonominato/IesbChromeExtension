@@ -1,3 +1,17 @@
+/**
+ * popup.js
+ *
+ * Script responsável pelo comportamento do popup da extensão.
+ *
+ * Responsabilidades principais:
+ * - Identificar em qual site o usuário está: Google Classroom, IESB Online ou Google Drive.
+ * - Controlar o texto, estado e visibilidade do botão principal do popup.
+ * - Exibir o status atual da extensão para o usuário.
+ * - Ler da memória os dados de presença já processados.
+ * - Exibir o resumo do processamento no popup.
+ * - Mostrar ou esconder o botão de relatório completo conforme existam dados em memória.
+ * - Abrir a página interna relatorio.html com o detalhamento dos dados processados.
+ */
 const SITE_CAPTURA = "classroom.google.com";
 const SITE_APLICACAO = "online.iesb.br";
 const SITE_DRIVE = "drive.google.com";

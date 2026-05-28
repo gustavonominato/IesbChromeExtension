@@ -1,3 +1,18 @@
+/**
+ * content.js
+ *
+ * Script injetado nas páginas habilitadas pela extensão.
+ *
+ * Responsabilidades principais:
+ * - Receber mensagens enviadas pelo popup ou pelo menu de contexto.
+ * - Capturar notas/dados do Google Classroom quando solicitado.
+ * - Aplicar notas no sistema online do IESB quando não houver dados de presença em memória.
+ * - Aplicar automaticamente as faltas no sistema online do IESB usando os dados de presença processados.
+ * - Identificar a data da aula na tela do IESB.
+ * - Comparar os alunos exibidos na página com os dados salvos em memória.
+ * - Marcar falta para alunos ausentes ou não encontrados como presentes.
+ * - Desmarcar falta para alunos identificados como presentes.
+ */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
         if (message.action === "capturar") {
@@ -6,9 +21,209 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         if (message.action === "aplicar") {
-            aplicarValorNoPrimeiroInput(sendResponse);
+            aplicarDadosNoIesb(sendResponse);
             return true;
         }
+
+function aplicarDadosNoIesb(sendResponse) {
+    chrome.storage.local.get(["presencaConsolidadoPorAluno", "valorCapturado"], result => {
+        if (result.presencaConsolidadoPorAluno) {
+            aplicarPresencasNoIesb(result.presencaConsolidadoPorAluno, sendResponse);
+            return;
+        }
+
+        aplicarValorNoPrimeiroInput(sendResponse);
+    });
+}
+
+function aplicarPresencasNoIesb(presencaConsolidadoPorAluno, sendResponse) {
+    const dataTela = identificarDataDaAulaNaTela();
+
+    console.log("[IESB Presença] Data identificada na tela:", dataTela);
+    console.log("[IESB Presença] Dados disponíveis em memória:", presencaConsolidadoPorAluno);
+
+    if (!dataTela) {
+        alert("Não foi possível identificar a data da aula nesta página.");
+        sendResponse({
+            success: false,
+            message: "Não foi possível identificar a data da aula nesta página."
+        });
+        return;
+    }
+
+    const dadosDaData = filtrarDadosPresencaPorData(presencaConsolidadoPorAluno, dataTela);
+
+    if (!dadosDaData.temDados) {
+        alert(`Não possuímos dados da aula ${formatarDataParaMensagem(dataTela)} para aplicar.`);
+        sendResponse({
+            success: false,
+            message: `Não possuímos dados da aula ${formatarDataParaMensagem(dataTela)} para aplicar.`
+        });
+        return;
+    }
+
+    const linhasAlunos = obterLinhasAlunosFrequencia();
+
+    let manipulados = 0;
+    let presentes = 0;
+    let ausentes = 0;
+    const naoEncontradosNaMemoria = [];
+    const semCheckboxFalta = [];
+
+    linhasAlunos.forEach(tr => {
+        const dadosLinha = extrairDadosLinhaFrequencia(tr);
+
+        if (!dadosLinha.nomeAluno || !dadosLinha.checkboxFalta) {
+            if (dadosLinha.nomeAluno && !dadosLinha.checkboxFalta) {
+                semCheckboxFalta.push(dadosLinha.nomeAluno);
+            }
+            return;
+        }
+
+        const alunoMemoria = dadosDaData.mapaPorNome.get(normalizarNome(dadosLinha.nomeAluno));
+        const estaPresente = alunoMemoria?.presente === true;
+
+        if (!alunoMemoria) {
+            naoEncontradosNaMemoria.push(dadosLinha.nomeAluno);
+        }
+
+        aplicarEstadoCheckboxFalta(dadosLinha.checkboxFalta, !estaPresente);
+
+        manipulados++;
+
+        if (estaPresente) {
+            presentes++;
+        } else {
+            ausentes++;
+        }
+    });
+
+    console.log("[IESB Presença] Resultado da aplicação:", {
+        dataTela,
+        manipulados,
+        presentes,
+        ausentes,
+        naoEncontradosNaMemoria,
+        semCheckboxFalta,
+    });
+
+    alert(
+        `Aplicação concluída para ${formatarDataParaMensagem(dataTela)}.\n\n` +
+        `Alunos manipulados: ${manipulados}\n` +
+        `Presentes: ${presentes}\n` +
+        `Ausentes: ${ausentes}`
+    );
+
+    sendResponse({
+        success: true,
+        message: `Manipulados: ${manipulados}. Presentes: ${presentes}. Ausentes: ${ausentes}.`
+    });
+}
+
+function identificarDataDaAulaNaTela() {
+    const ths = Array.from(document.querySelectorAll("th"));
+
+    for (const th of ths) {
+        const texto = String(th.innerText || "").trim();
+        const match = texto.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+
+        if (match) {
+            return `${match[3]}-${match[2]}-${match[1]}`;
+        }
+    }
+
+    const textoPagina = String(document.body?.innerText || "");
+    const match = textoPagina.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+
+    if (match) {
+        return `${match[3]}-${match[2]}-${match[1]}`;
+    }
+
+    return "";
+}
+
+function filtrarDadosPresencaPorData(presencaConsolidadoPorAluno, dataTela) {
+    const alunos = presencaConsolidadoPorAluno.consolidadoParaAplicacao || [];
+    const datasAulas = presencaConsolidadoPorAluno.datasAulas || [];
+
+    const temDados = datasAulas.includes(dataTela);
+    const mapaPorNome = new Map();
+
+    if (!temDados) {
+        return {
+            temDados: false,
+            mapaPorNome,
+        };
+    }
+
+    alunos.forEach(aluno => {
+        const nomeNormalizado = normalizarNome(aluno.nomeCompleto || `${aluno.nome || ""} ${aluno.sobrenome || ""}`);
+
+        if (!nomeNormalizado) return;
+
+        mapaPorNome.set(nomeNormalizado, {
+            aluno,
+            presente: aluno.presencasPorData?.[dataTela] === 1,
+        });
+    });
+
+    return {
+        temDados: true,
+        mapaPorNome,
+    };
+}
+
+function obterLinhasAlunosFrequencia() {
+    return Array.from(document.querySelectorAll("tr.tr01"));
+}
+
+function extrairDadosLinhaFrequencia(tr) {
+    const checkboxFalta = Array.from(tr.querySelectorAll('input[type="checkbox"]'))
+        .find(input => String(input.name || "").startsWith("Falta"));
+
+    const colunas = Array.from(tr.querySelectorAll("td"));
+    const matricula = colunas[0]?.innerText?.trim() || "";
+
+    let nomeAluno = "";
+
+    if (colunas[1]) {
+        const linkNome = colunas[1].querySelector("a");
+        nomeAluno = (linkNome?.innerText || colunas[1].innerText || "").trim();
+        nomeAluno = nomeAluno.replace(/\s*-\s*Matriculado\s*/i, "").trim();
+    }
+
+    return {
+        tr,
+        matricula,
+        nomeAluno,
+        checkboxFalta,
+    };
+}
+
+function aplicarEstadoCheckboxFalta(checkbox, deveMarcarFalta) {
+    if (!checkbox) return;
+
+    if (checkbox.checked === deveMarcarFalta) {
+        return;
+    }
+
+    checkbox.click();
+
+    checkbox.dispatchEvent(new Event("input", { bubbles: true }));
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function formatarDataParaMensagem(dataIso) {
+    if (!dataIso) return "";
+
+    const partes = dataIso.split("-");
+
+    if (partes.length !== 3) {
+        return dataIso;
+    }
+
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
 
         sendResponse({
             success: false,
