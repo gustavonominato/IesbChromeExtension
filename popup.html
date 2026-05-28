@@ -26,11 +26,35 @@
             font-size: 12px;
             color: #444;
         }
+
+        #resumoPresenca {
+            display: none;
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            background: #f3f4f6;
+            color: #333;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        #resumoPresenca strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
 <button id="btnExecutar">Carregando...</button>
 <div id="status">Inicializando...</div>
+
+<div id="resumoPresenca">
+    <strong>Presença processada</strong>
+    <div>Arquivos processados: <span id="totalArquivosProcessados">0</span></div>
+    <div>Alunos encontrados: <span id="totalAlunosProcessados">0</span></div>
+    <div>Aulas identificadas: <span id="totalAulasProcessadas">0</span></div>
+</div>
 
 <script src="popup.js"></script>
 </body>

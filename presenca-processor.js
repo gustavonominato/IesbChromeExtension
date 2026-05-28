@@ -16,16 +16,29 @@ async function processarArquivosPresenca(arquivosExcel) {
     const consolidadoPorAluno = montarConsolidadoPorAluno(dadosConsolidados, datasAulas);
     const resumoPorAluno = montarResumoPorAluno(dadosConsolidados, datasAulas.length);
 
-    imprimirPresencasPorAula(dadosConsolidados);
-    imprimirConsolidadoPorAluno(consolidadoPorAluno, datasAulas);
-    imprimirResumoPorAluno(resumoPorAluno);
+    const consolidadoParaAplicacao = montarConsolidadoParaAplicacao(consolidadoPorAluno, datasAulas);
 
-    return {
+    const resultado = {
+        processadoEm: new Date().toISOString(),
+        totalArquivosProcessados: arquivosExcel.length,
+        totalRegistros: dadosConsolidados.length,
+        totalAulas: datasAulas.length,
+        totalAlunos: consolidadoPorAluno.length,
         dadosConsolidados,
         datasAulas,
         consolidadoPorAluno,
         resumoPorAluno,
+        consolidadoParaAplicacao,
     };
+
+    imprimirPresencasPorAula(dadosConsolidados);
+    imprimirConsolidadoPorAluno(consolidadoPorAluno, datasAulas);
+    imprimirResumoPorAluno(resumoPorAluno);
+    imprimirConsolidadoParaAplicacao(consolidadoParaAplicacao);
+
+    await salvarConsolidadoPresencaEmMemoria(resultado);
+
+    return resultado;
 }
 
 async function processarArquivoExcel(arquivo, contexto) {
@@ -160,6 +173,62 @@ function montarConsolidadoPorAluno(dados, datasAulas) {
     });
 
     return Object.values(mapa).sort(compararAlunosPorNomeCompleto);
+}
+
+function montarConsolidadoParaAplicacao(consolidadoPorAluno, datasAulas) {
+    return consolidadoPorAluno.map(aluno => {
+        const nomeCompleto = `${aluno.nome} ${aluno.sobrenome}`.trim();
+        const quantidadeFaltas = datasAulas.filter(data => aluno.presencasPorData[data] !== 1).length;
+        const faltasPonderadas = quantidadeFaltas * 1.5;
+
+        const presencasPorDataFormatada = {};
+
+        datasAulas.forEach(data => {
+            presencasPorDataFormatada[formatarData(data)] = aluno.presencasPorData[data] === 1 ? 1 : 0;
+        });
+
+        return {
+            nome: aluno.nome,
+            sobrenome: aluno.sobrenome,
+            nomeCompleto,
+            presencas: datasAulas.length - quantidadeFaltas,
+            faltas: quantidadeFaltas,
+            faltasPonderadas,
+            totalAulas: datasAulas.length,
+            presencasPorData: aluno.presencasPorData,
+            presencasPorDataFormatada,
+        };
+    });
+}
+
+async function salvarConsolidadoPresencaEmMemoria(resultado) {
+    if (!chrome || !chrome.storage || !chrome.storage.local) {
+        console.warn('[Presença Processor] chrome.storage.local indisponível. Consolidado não foi salvo em memória.');
+        return;
+    }
+
+    await chrome.storage.local.set({
+        presencaConsolidadoPorAluno: resultado,
+    });
+
+    console.log('[Presença Processor] Consolidado por aluno salvo em memória da extensão:', {
+        chave: 'presencaConsolidadoPorAluno',
+        totalArquivosProcessados: resultado.totalArquivosProcessados,
+        totalAlunos: resultado.totalAlunos,
+        totalAulas: resultado.totalAulas,
+        processadoEm: resultado.processadoEm,
+    });
+}
+
+function imprimirConsolidadoParaAplicacao(consolidadoParaAplicacao) {
+    console.log('[Presença Processor] Consolidado para aplicação na próxima página:');
+    console.table(consolidadoParaAplicacao.map(aluno => ({
+        nomeCompleto: aluno.nomeCompleto,
+        presencas: aluno.presencas,
+        faltas: aluno.faltas,
+        faltasPonderadas: aluno.faltasPonderadas,
+        totalAulas: aluno.totalAulas,
+    })));
 }
 
 function calcularFaltasPonderadas(aluno, datasAulas) {
