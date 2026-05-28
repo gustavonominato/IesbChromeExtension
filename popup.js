@@ -8,6 +8,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btnExecutar = document.getElementById("btnExecutar");
     const status = document.getElementById("status");
 
+    configurarBotaoRelatorio();
+
     const downloadPresencaProcessado = await carregarResumoPresencaProcessada();
 
     const [tab] = await chrome.tabs.query({
@@ -34,7 +36,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         btnExecutar.innerText = "Capturar";
         status.innerText = "Google Classroom identificado.";
     } else if (isSiteAplicacao) {
+        if (!downloadPresencaProcessado) {
+            btnExecutar.style.display = "none";
+            btnExecutar.disabled = true;
+            status.innerText = "IESB Online identificado. Não há dados em memória para aplicar.";
+            return;
+        }
+
+        btnExecutar.style.display = "block";
         btnExecutar.innerText = "Aplicar";
+        btnExecutar.disabled = false;
+        btnExecutar.classList.remove("download-processado");
         status.innerText = "IESB Online identificado.";
     } else if (isSiteDrive) {
         if (downloadPresencaProcessado) {
@@ -103,6 +115,11 @@ async function carregarResumoPresencaProcessada() {
         })));
 
         resumoPresenca.style.display = "block";
+
+        const btnVerRelatorio = document.getElementById("btnVerRelatorio");
+        if (btnVerRelatorio)
+            btnVerRelatorio.style.display = "block";
+
         return true;
     } catch (error) {
         console.error("[IESB Popup] Erro ao carregar resumo de presença:", error);
@@ -177,4 +194,22 @@ function formatarDataPopup(dataIso) {
     }
 
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+function configurarBotaoRelatorio() {
+    const btnVerRelatorio = document.getElementById("btnVerRelatorio");
+
+    if (!btnVerRelatorio) {
+        console.warn("[IESB Popup] Botão btnVerRelatorio não encontrado no popup.html");
+        return;
+    }
+    btnVerRelatorio.style.display = "none";
+
+    btnVerRelatorio.addEventListener("click", () => {
+        console.log("[IESB Popup] Abrindo relatório completo de presença");
+
+        chrome.tabs.create({
+            url: chrome.runtime.getURL("relatorio.html")
+        });
+    });
 }
