@@ -266,40 +266,156 @@ Ao final:
 
 # Estrutura dos arquivos
 
+```txt
+IESB Chrome Extension
+│
+├── background.js
+├── content.js
+├── popup.html
+├── popup.js
+├── relatorio.html
+├── relatorio.js
+├── manifest.json
+│
+├── libs/
+│   ├── jszip.min.js
+│   └── xlsx.full.min.js
+│
+├── modules/
+│   ├── notas-flow.js
+│   ├── presenca-aplicacao-flow.js
+│   ├── presenca-download-flow.js
+│   ├── presenca-processor.js
+│   └── storage-service.js
+│
+└── utils/
+    ├── date-utils.js
+    └── text-utils.js
+```
+
+---
+
 ## background.js
 
-Service Worker da extensão.
+Service Worker principal da extensão.
 
 Responsável por:
 
+- Carregar bibliotecas e módulos.
+- Registrar listeners.
 - Interceptar downloads.
-- Processar ZIPs.
-- Processar Excels.
-- Controlar o fluxo principal.
+- Delegar o fluxo de presença.
+- Centralizar a configuração do Service Worker.
 
 ---
 
 ## content.js
 
-Script executado nas páginas.
+Script injetado nas páginas suportadas.
 
 Responsável por:
 
-- Captura de dados.
-- Aplicação de notas.
-- Aplicação automática de faltas.
+- Receber mensagens do popup.
+- Roteiar ações para os módulos corretos.
+- Manter a integração entre a página e os fluxos especializados.
 
 ---
 
 ## popup.js
 
-Controla o popup da extensão.
+Controlador principal do popup da extensão.
 
 Responsável por:
 
-- Exibir status.
-- Mostrar resumo.
+- Identificar a página atual.
+- Atualizar status visuais.
+- Exibir resumo do processamento.
 - Abrir relatórios.
+- Controlar os botões da extensão.
+
+---
+
+## relatorio.html / relatorio.js
+
+Tela de relatório interno da extensão.
+
+Responsável por:
+
+- Exibir aulas processadas.
+- Mostrar consolidado por aluno.
+- Mostrar faltas e presenças.
+- Exibir tabelas detalhadas.
+
+---
+
+# Pasta libs
+
+Contém bibliotecas externas utilizadas pela extensão.
+
+## jszip.min.js
+
+Biblioteca utilizada para:
+
+- Abrir ZIPs em memória.
+- Ler arquivos compactados.
+- Localizar planilhas dentro de subpastas.
+
+---
+
+## xlsx.full.min.js
+
+Biblioteca SheetJS utilizada para:
+
+- Ler arquivos Excel.
+- Interpretar planilhas `.xlsx` e `.xls`.
+- Converter dados para JSON.
+
+---
+
+# Pasta modules
+
+Contém os fluxos principais da aplicação.
+
+---
+
+## notas-flow.js
+
+Responsável pelo fluxo de notas.
+
+Funções principais:
+
+- Capturar notas do Google Classroom.
+- Consolidar totais.
+- Aplicar notas no Online IESB.
+- Localizar inputs automaticamente.
+
+---
+
+## presenca-aplicacao-flow.js
+
+Responsável pela aplicação automática das faltas.
+
+Funções principais:
+
+- Identificar a data da aula na página.
+- Comparar dados em memória.
+- Localizar alunos.
+- Marcar/desmarcar faltas.
+- Exibir resumo final da aplicação.
+
+---
+
+## presenca-download-flow.js
+
+Responsável pelo fluxo de downloads.
+
+Funções principais:
+
+- Interceptar downloads.
+- Processar ZIPs.
+- Processar Excel direto.
+- Carregar arquivos em memória.
+- Enviar arquivos para o processador de presença.
 
 ---
 
@@ -307,24 +423,55 @@ Responsável por:
 
 Módulo principal de processamento das presenças.
 
-Responsável por:
+Funções principais:
 
 - Ler planilhas.
 - Interpretar tempo de permanência.
-- Consolidar dados.
+- Consolidar presença por aluno.
+- Consolidar presença por aula.
 - Calcular faltas.
+- Gerar estrutura para aplicação automática.
 
 ---
 
-## relatorio.html / relatorio.js
+## storage-service.js
 
-Tela interna da extensão.
+Camada centralizada de acesso ao `chrome.storage.local`.
+
+Funções principais:
+
+- Salvar dados em memória.
+- Recuperar dados processados.
+- Limpar dados.
+- Centralizar chaves da extensão.
+
+---
+
+# Pasta utils
+
+Contém funções auxiliares reutilizáveis.
+
+---
+
+## text-utils.js
 
 Responsável por:
 
-- Exibir relatórios completos.
-- Mostrar consolidados.
-- Exibir estatísticas.
+- Normalizar textos.
+- Remover acentos.
+- Padronizar nomes.
+- Facilitar comparação de alunos.
+
+---
+
+## date-utils.js
+
+Responsável por:
+
+- Converter datas.
+- Padronizar formatos.
+- Extrair datas de textos.
+- Facilitar comparação de aulas.
 
 ---
 
