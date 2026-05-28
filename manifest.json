@@ -1,17 +1,24 @@
 {
   "manifest_version": 3,
   "name": "IESB Chrome Extension",
-  "version": "1.0.7",
-  "description": "Automatiza preenchimento de dados pelos professores",
+  "version": "1.0.9",
+  "description": "Automatiza atividades rotineiras dos docentes do IESB",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "contextMenus",
+    "downloads"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "host_permissions": [
     "https://classroom.google.com/*",
-    "https://online.iesb.br/*"
+    "https://online.iesb.br/*",
+    "https://drive.google.com/*",
+    "https://takeout-download-drive.usercontent.google.com/*"
   ],
   "action": {
     "default_title": "Capturar e Aplicar",
@@ -21,7 +28,8 @@
     {
       "matches": [
         "https://classroom.google.com/*",
-        "https://online.iesb.br/*"
+        "https://online.iesb.br/*",
+        "https://drive.google.com/*"
       ],
       "js": ["content.js"]
     }
