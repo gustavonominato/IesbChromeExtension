@@ -1,5 +1,3 @@
-
-
 /**
  * notas-flow.js
  *
@@ -57,8 +55,8 @@ function capturarValor(sendResponse) {
     console.table(
         dadosExtraidos.map(linha => ({
             aluno: linha[0],
-            valores: linha.slice(1, -1).join(";"),
-            total: linha[linha.length - 1],
+            notasExtraidas: linha.slice(1, -1).join(";"),
+            notaParaAplicar: linha[linha.length - 1],
             linhaFinal: linha.join(";")
         }))
     );
@@ -89,15 +87,35 @@ function extrairDadosDaLinha(tr) {
         .map(extrairValorDaColuna)
         .filter(valor => valor !== "");
 
-    const total = notas.reduce((soma, valor) => {
-        return soma + converterParaNumero(valor);
-    }, 0);
+    const ultimaNotaValida = extrairUltimaNotaValida(notas);
+
+    if (ultimaNotaValida === null) {
+        console.warn("[Notas Flow] Nenhuma nota válida encontrada para o aluno:", {
+            aluno: nomeAluno,
+            notas
+        });
+        return null;
+    }
 
     return [
         nomeAluno,
         ...notas,
-        formatarNumero(total)
+        ultimaNotaValida
     ];
+}
+
+function extrairUltimaNotaValida(notas) {
+    let ultimaNotaValida = null;
+
+    notas.forEach(nota => {
+        const numero = converterParaNumero(nota);
+
+        if (numero !== null) {
+            ultimaNotaValida = normalizarValor(nota);
+        }
+    });
+
+    return ultimaNotaValida;
 }
 
 function extrairNomeAluno(colunaNome) {
@@ -116,16 +134,20 @@ function extrairNomeAluno(colunaNome) {
 
 function converterParaNumero(valor) {
     if (!valor) {
-        return 0;
+        return null;
     }
 
     const numero = String(valor)
         .replace(",", ".")
         .replace(/[^\d.-]/g, "");
 
+    if (!numero) {
+        return null;
+    }
+
     const convertido = Number(numero);
 
-    return Number.isFinite(convertido) ? convertido : 0;
+    return Number.isFinite(convertido) ? convertido : null;
 }
 
 function formatarNumero(valor) {
@@ -225,7 +247,7 @@ function aplicarValorNoPrimeiroInput(sendResponse) {
 
                 return {
                     nome: partes[0],
-                    total: partes[partes.length - 1],
+                    notaParaAplicar: partes[partes.length - 1],
                     linhaOriginal: linha
                 };
             });
@@ -242,14 +264,20 @@ function aplicarValorNoPrimeiroInput(sendResponse) {
             }
 
             const input = Array.from(tr.querySelectorAll("input"))
-                .find(input => !input.disabled && input.type !== "hidden");
+                .find(input => {
+                    if (input.disabled || input.type === "hidden") {
+                        return false;
+                    }
+
+                    return String(input.value || "").trim() === "";
+                });
 
             if (!input) {
                 naoEncontrados.push(`${registro.nome} - input não encontrado`);
                 return;
             }
 
-            preencherInput(input, registro.total);
+            preencherInput(input, registro.notaParaAplicar);
             aplicados++;
         });
 
