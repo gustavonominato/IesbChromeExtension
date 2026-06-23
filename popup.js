@@ -25,6 +25,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     configurarBotaoRelatorio();
 
     const downloadPresencaProcessado = await carregarResumoPresencaProcessada();
+    const notasCapturadasEmMemoria = await verificarNotasCapturadasEmMemoria();
+    const existemDadosParaAplicar = downloadPresencaProcessado || notasCapturadasEmMemoria.possuiNotas;
 
     const [tab] = await chrome.tabs.query({
         active: true,
@@ -47,10 +49,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const isSiteDrive = hostname === SITE_DRIVE;
 
     if (isSiteCaptura) {
+        esconderSelecaoColunasNotas();
         btnExecutar.innerText = "Capturar";
         status.innerText = "Google Classroom identificado.";
     } else if (isSiteAplicacao) {
-        if (!downloadPresencaProcessado) {
+        if (!existemDadosParaAplicar) {
             btnExecutar.style.display = "none";
             btnExecutar.disabled = true;
             status.innerText = "IESB Online identificado. Não há dados em memória para aplicar.";
@@ -61,8 +64,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         btnExecutar.innerText = "Aplicar";
         btnExecutar.disabled = false;
         btnExecutar.classList.remove("download-processado");
-        status.innerText = "IESB Online identificado.";
+        renderizarSelecaoColunasNotas(notasCapturadasEmMemoria);
+
+        if (downloadPresencaProcessado && notasCapturadasEmMemoria.possuiNotas) {
+            status.innerText = `IESB Online identificado. Há dados de presença e notas de ${notasCapturadasEmMemoria.totalAlunos} alunos em memória para aplicar.`;
+        } else if (downloadPresencaProcessado) {
+            status.innerText = "IESB Online identificado. Há dados de presença em memória para aplicar.";
+        } else {
+            status.innerText = `IESB Online identificado. Há notas de ${notasCapturadasEmMemoria.totalAlunos} alunos em memória para aplicar.`;
+        }
     } else if (isSiteDrive) {
+        esconderSelecaoColunasNotas();
         if (downloadPresencaProcessado) {
             marcarDownloadComoProcessado();
         } else {
@@ -73,6 +85,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         return;
     } else {
+        esconderSelecaoColunasNotas();
         btnExecutar.innerText = "Indisponível";
         btnExecutar.disabled = true;
         status.innerText = "Esta página não está habilitada para uso da extensão.";
@@ -226,4 +239,116 @@ function configurarBotaoRelatorio() {
             url: chrome.runtime.getURL("relatorio.html")
         });
     });
+}
+
+async function verificarNotasCapturadasEmMemoria() {
+    try {
+        const { valorCapturado, notasCapturadas, notasColunasSelecionadas } = await chrome.storage.local.get([
+            "valorCapturado",
+            "notasCapturadas",
+            "notasColunasSelecionadas"
+        ]);
+
+        const linhasLegadas = typeof valorCapturado === "string"
+            ? valorCapturado.split("\n").map(linha => linha.trim()).filter(Boolean)
+            : [];
+
+        const cabecalhos = Array.isArray(notasCapturadas?.cabecalhos)
+            ? notasCapturadas.cabecalhos
+            : [];
+
+        const alunos = Array.isArray(notasCapturadas?.alunos)
+            ? notasCapturadas.alunos
+            : [];
+
+        const resultado = {
+            possuiNotas: alunos.length > 0 || linhasLegadas.length > 0,
+            totalAlunos: alunos.length || linhasLegadas.length,
+            totalColunas: cabecalhos.length,
+            cabecalhos,
+            colunasSelecionadas: Array.isArray(notasColunasSelecionadas) ? notasColunasSelecionadas : [],
+            tamanho: valorCapturado?.length || 0,
+            possuiEstruturaNova: alunos.length > 0,
+        };
+
+        console.log("[IESB Popup] Notas capturadas em memória:", resultado);
+
+        return resultado;
+    } catch (error) {
+        console.error("[IESB Popup] Erro ao verificar notas capturadas em memória:", error);
+        return {
+            possuiNotas: false,
+            totalAlunos: 0,
+            totalColunas: 0,
+            cabecalhos: [],
+            colunasSelecionadas: [],
+            tamanho: 0,
+            possuiEstruturaNova: false,
+        };
+    }
+}
+
+function renderizarSelecaoColunasNotas(notasCapturadasEmMemoria) {
+    const selecaoNotas = document.getElementById("selecaoNotas");
+    const listaColunasNotas = document.getElementById("listaColunasNotas");
+
+    if (!selecaoNotas || !listaColunasNotas) {
+        console.warn("[IESB Popup] Elementos de seleção de notas não encontrados no popup.html");
+        return;
+    }
+
+    listaColunasNotas.innerHTML = "";
+
+    if (!notasCapturadasEmMemoria.possuiNotas || !notasCapturadasEmMemoria.cabecalhos.length) {
+        selecaoNotas.style.display = "none";
+        return;
+    }
+
+    notasCapturadasEmMemoria.cabecalhos.forEach((cabecalho, indice) => {
+        const checkboxId = `colunaNota_${indice}`;
+        const linha = document.createElement("div");
+        linha.className = "linha-coluna-nota";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = checkboxId;
+        checkbox.value = String(indice);
+        checkbox.checked = notasCapturadasEmMemoria.colunasSelecionadas.includes(indice);
+
+        checkbox.addEventListener("change", salvarColunasNotasSelecionadas);
+
+        const label = document.createElement("label");
+        label.htmlFor = checkboxId;
+        label.innerText = cabecalho || `Nota ${indice + 1}`;
+
+        linha.appendChild(checkbox);
+        linha.appendChild(label);
+        listaColunasNotas.appendChild(linha);
+    });
+
+    selecaoNotas.style.display = "block";
+}
+
+function esconderSelecaoColunasNotas() {
+    const selecaoNotas = document.getElementById("selecaoNotas");
+    const listaColunasNotas = document.getElementById("listaColunasNotas");
+
+    if (listaColunasNotas) {
+        listaColunasNotas.innerHTML = "";
+    }
+
+    if (selecaoNotas) {
+        selecaoNotas.style.display = "none";
+    }
+}
+
+async function salvarColunasNotasSelecionadas() {
+    const checkboxes = Array.from(document.querySelectorAll("#listaColunasNotas input[type='checkbox']"));
+    const notasColunasSelecionadas = checkboxes
+        .filter(checkbox => checkbox.checked)
+        .map(checkbox => Number(checkbox.value));
+
+    await chrome.storage.local.set({ notasColunasSelecionadas });
+
+    console.log("[IESB Popup] Colunas de notas selecionadas:", notasColunasSelecionadas);
 }

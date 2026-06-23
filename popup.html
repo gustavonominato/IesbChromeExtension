@@ -52,6 +52,45 @@
             margin-top: 4px;
         }
 
+        #selecaoNotas {
+            display: none;
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #333;
+            font-size: 12px;
+            line-height: 1.4;
+            border: 1px solid #e5e7eb;
+        }
+
+        #selecaoNotas strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .linha-coluna-nota {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            padding: 4px 0;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .linha-coluna-nota:first-child {
+            border-top: none;
+        }
+
+        .linha-coluna-nota input {
+            margin-top: 2px;
+        }
+
+        .linha-coluna-nota label {
+            flex: 1;
+            cursor: pointer;
+        }
+
         .linha-aula-processada {
             padding: 3px 0;
             border-top: 1px solid #ddd;
@@ -70,6 +109,10 @@
 <body>
 <button id="btnExecutar">Carregando...</button>
 <div id="status">Inicializando...</div>
+<div id="selecaoNotas">
+    <strong>Colunas de notas para aplicar</strong>
+    <div id="listaColunasNotas"></div>
+</div>
 
 <div id="resumoPresenca">
     <strong>Presença processada</strong>

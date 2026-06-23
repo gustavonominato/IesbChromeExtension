@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IESB Chrome Extension - Docentes",
-  "version": "1.0.17",
+  "version": "1.0.28",
   "description": "Automatiza atividades rotineiras dos docentes do IESB",
   "author": "Nominato Tecnologia",
   "permissions": [
